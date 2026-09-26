@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Salar Focus Lock</string>
+    <string name="accessibility_service_label">Salar Focus Lock</string>
+    <string name="accessibility_service_description">Lets Salar Focus Lock detect which app is currently open so it can enforce your focus schedules. It only reads which app is in the foreground — never screen text, passwords, messages, notifications, or any other content.</string>
+</resources>

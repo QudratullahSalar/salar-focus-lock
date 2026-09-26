@@ -1,0 +1,67 @@
+package com.salar.focuslock.domain.blocking
+
+import com.salar.focuslock.domain.model.BlockDecision
+import com.salar.focuslock.domain.model.FocusRule
+import com.salar.focuslock.domain.repository.RuleRepository
+import com.salar.focuslock.domain.scheduler.ScheduleEngine
+import java.time.Duration
+import java.time.LocalDateTime
+import javax.inject.Inject
+
+/**
+ * Sits between the AccessibilityService (or any future caller) and the schedule/data layers:
+ *
+ *   AccessibilityService -> BlockingEngine -> ScheduleEngine -> RuleRepository -> Room
+ *
+ * BlockingEngine owns no business logic of its own beyond "which active rule, if any, blocks
+ * this package" — the actual time-window math is ScheduleEngine's (already unit-tested in
+ * Batch 1), and rule/blocked-app data comes from RuleRepository. This keeps
+ * AccessibilityService itself a thin event-to-decision relay with no logic to test in
+ * isolation.
+ */
+class BlockingEngine @Inject constructor(
+    private val ruleRepository: RuleRepository
+) {
+
+    /**
+     * Decides whether [packageName] should currently be blocked, evaluated at [currentDateTime].
+     *
+     * If more than one currently-active rule blocks the same package (overlapping rules that
+     * share a blocked app), the rule with the LEAST remaining time is reported — the tightest,
+     * soonest-to-end constraint is the most actionable one to show the user. This is a
+     * deliberate, deterministic tie-break, not an arbitrary "first match wins".
+     */
+    suspend fun evaluate(packageName: String, currentDateTime: LocalDateTime): BlockDecision {
+        val enabledRules = ruleRepository.getEnabledRules()
+        val activeRules = ScheduleEngine.getActiveRules(enabledRules, currentDateTime)
+
+        var winningRule: FocusRule? = null
+        var winningRemaining: Duration? = null
+
+        for (rule in activeRules) {
+            val blockedApps = ruleRepository.getBlockedApps(rule.id)
+            val blocksThisPackage = blockedApps.any { it.packageName == packageName }
+            if (!blocksThisPackage) continue
+
+            val remaining = ScheduleEngine.getRemainingDuration(rule, currentDateTime)
+            if (winningRemaining == null || remaining < winningRemaining) {
+                winningRule = rule
+                winningRemaining = remaining
+            }
+        }
+
+        val rule = winningRule
+        val remaining = winningRemaining
+        return if (rule != null && remaining != null) {
+            BlockDecision(
+                shouldBlock = true,
+                packageName = packageName,
+                ruleId = rule.id,
+                ruleName = rule.name,
+                remainingDuration = remaining
+            )
+        } else {
+            BlockDecision(shouldBlock = false, packageName = packageName)
+        }
+    }
+}

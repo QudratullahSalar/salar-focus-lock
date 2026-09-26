@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      No <uses-permission> entries in this batch. AccessibilityService access is not requested
+      via a uses-permission tag — it is granted by the user manually in system Accessibility
+      settings, which is why AccessibilityPermissionChecker only reads that setting and never
+      requests it. UsageStatsManager, foreground service, boot receiver, and Device Owner
+      permissions remain for later batches, each declared and justified here when introduced.
+    -->
+
+    <application
+        android:name=".FocusLockApp"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.SalarFocusLock"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" is what actually
+          restricts binding to this service to the Android system itself — required for every
+          AccessibilityService, not an app-requested permission. Exists solely to detect the
+          foreground app package for focus-schedule enforcement; see the service class's KDoc
+          and accessibility_service_config.xml for exactly what it does and does not read.
+        -->
+        <service
+            android:name=".blocking.accessibility.FocusLockAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!--
+          FocusLockActivity: the redirect screen shown when a blocked app is foregrounded.
+          exported=false — only ever launched internally by BlockingCoordinator, never by
+          another app. singleTask — reused rather than duplicated if a second block redirect
+          fires while it's already showing (see its onNewIntent). excludeFromRecents — this is
+          an interstitial enforcement screen, not something the user should find or re-enter
+          from the Recents/overview list.
+        -->
+        <activity
+            android:name=".blocking.lockscreen.FocusLockActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.SalarFocusLock" />
+
+    </application>
+
+</manifest>

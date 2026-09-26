@@ -1,0 +1,56 @@
+# Gradle
+.gradle/
+build/
+app/build/
+!gradle/wrapper/gradle-wrapper.jar
+gradle-app.setting
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Local configuration (never commit — machine-specific and/or secret)
+local.properties
+*.keystore
+*.jks
+key.properties
+google-services.json
+secrets.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+
+# Log/OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+/app/release/
+/app/debug/
+bin/
+gen/
+out/
+
+# Room schema exports (currently disabled per FocusLockDatabase — kept ignored for when enabled)
+app/schemas/
+
+# Kotlin
+.kotlin/
+
+# Local test/lint reports
+*.hprof
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/

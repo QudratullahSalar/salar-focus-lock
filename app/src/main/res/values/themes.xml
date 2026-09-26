@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Minimal placeholder theme so the manifest resolves cleanly.
+      Compose screens use SalarFocusLockTheme (Material3) directly; this XML theme
+      only governs the window background/splash before Compose takes over.
+    -->
+    <style name="Theme.SalarFocusLock" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
