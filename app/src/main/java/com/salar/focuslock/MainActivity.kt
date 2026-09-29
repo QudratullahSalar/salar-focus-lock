@@ -1,40 +1,51 @@
 package com.salar.focuslock
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import com.salar.focuslock.ui.editor.RuleEditorViewModel
+import com.salar.focuslock.ui.main.AppRoot
+import com.salar.focuslock.ui.main.MainViewModel
 import com.salar.focuslock.ui.theme.SalarFocusLockTheme
 import dagger.hilt.android.AndroidEntryPoint
 
-/**
- * Placeholder entry point only — establishes the Compose + Hilt wiring so the project
- * is a buildable, launchable app. The real Dashboard/Rules/Lock-screen UI is out of
- * scope for Batch 1 per the "no unnecessary UI" instruction and is added in a later batch.
- */
+/** Host for the rule list / rule editor screens (see ui/main/AppRoot.kt). */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val mainViewModel: MainViewModel by viewModels()
+    private val editorViewModel: RuleEditorViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             SalarFocusLockTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    PlaceholderScreen()
-                }
+                AppRoot(
+                    mainViewModel = mainViewModel,
+                    editorViewModel = editorViewModel,
+                    onOpenAccessibilitySettings = { openAccessibilitySettings() }
+                )
             }
         }
     }
-}
 
-@Composable
-private fun PlaceholderScreen() {
-    Text(text = "Salar Focus Lock — foundation build (Batch 1)")
+    override fun onResume() {
+        super.onResume()
+        // The user may have just toggled the service in system settings — re-check on return.
+        mainViewModel.refreshAccessibilityStatus()
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        } catch (e: ActivityNotFoundException) {
+            // Extremely rare (OEM without the standard settings screen) — nothing sensible to do.
+        }
+    }
 }

@@ -50,7 +50,7 @@ class AppDiscoveryRepositoryImpl @Inject constructor(
             InstalledApp(
                 packageName = packageName,
                 appName = packageManager.getApplicationLabel(appInfo).toString(),
-                isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+                isSystemApp = appInfo.isNonUpdatedSystemApp(),
                 // Best-effort assumption for a single lookup — unlike getInstalledLaunchableApps,
                 // this isn't reached via a resolved LAUNCHER query, so launchability isn't
                 // independently verified here. Acceptable for the Focus Lock screen's use case
@@ -84,7 +84,7 @@ class AppDiscoveryRepositoryImpl @Inject constructor(
             InstalledApp(
                 packageName = pkgName,
                 appName = packageManager.getApplicationLabel(appInfo).toString(),
-                isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+                isSystemApp = appInfo.isNonUpdatedSystemApp(),
                 // Reached via a resolved ACTION_MAIN/CATEGORY_LAUNCHER query, so launchable by definition.
                 isLaunchable = true
             )
@@ -95,3 +95,12 @@ class AppDiscoveryRepositoryImpl @Inject constructor(
         }
     }
 }
+
+/**
+ * True for preinstalled system apps that the user has NOT updated. A preinstalled app that has
+ * received a Play Store update (YouTube, Chrome, Gmail...) carries FLAG_UPDATED_SYSTEM_APP and is
+ * treated as a normal user-facing app, so it isn't hidden by the picker's "system apps" filter.
+ */
+private fun ApplicationInfo.isNonUpdatedSystemApp(): Boolean =
+    (flags and ApplicationInfo.FLAG_SYSTEM) != 0 &&
+        (flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0

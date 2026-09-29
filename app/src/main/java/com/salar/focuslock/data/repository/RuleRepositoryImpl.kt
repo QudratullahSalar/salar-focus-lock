@@ -26,7 +26,15 @@ class RuleRepositoryImpl @Inject constructor(
         focusRuleDao.getEnabledRules().map { it.toDomain() }
 
     override suspend fun upsertRule(rule: FocusRule): Long =
-        focusRuleDao.insert(rule.toEntity())
+        if (rule.id == 0L) {
+            focusRuleDao.insert(rule.toEntity())
+        } else {
+            // Plain UPDATE, not insert-with-REPLACE: REPLACE deletes the old row first, which
+            // would cascade-delete this rule's blocked_apps (FK onDelete = CASCADE) and null out
+            // its sessions (SET_NULL).
+            focusRuleDao.update(rule.toEntity())
+            rule.id
+        }
 
     override suspend fun deleteRule(rule: FocusRule) {
         focusRuleDao.delete(rule.toEntity())

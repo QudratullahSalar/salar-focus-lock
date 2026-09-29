@@ -9,6 +9,18 @@
       permissions remain for later batches, each declared and justified here when introduced.
     -->
 
+    <!--
+      Package visibility (Android 11+): lets the app picker see launchable apps so the user can
+      choose which ones to lock. Scoped to the launcher intent only, so it does NOT need the
+      broad QUERY_ALL_PACKAGES permission.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".FocusLockApp"
         android:allowBackup="false"
