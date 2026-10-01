@@ -2,7 +2,6 @@ package com.salar.focuslock.domain.blocking
 
 import com.salar.focuslock.domain.model.BlockedApp
 import com.salar.focuslock.domain.model.FocusRule
-import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,7 +12,10 @@ import java.time.Duration
 import java.time.LocalDateTime
 
 /**
- * Unit tests for BlockingEngine, using FakeRuleRepository so no Room/Android/Hilt is involved.
+ * Unit tests for BlockingEngine, using FakeRuleSnapshotProvider so no Room/Android/Hilt/
+ * coroutines is involved — BlockingEngine.evaluate() is now plain synchronous code (see its
+ * KDoc: it reads an in-memory RuleSnapshotProvider, not RuleRepository, specifically so the
+ * real AccessibilityService path has no suspend/Room round trip on it).
  *
  * IMPORTANT: these tests were written but have NOT been executed — no JVM/Gradle is available
  * in this environment. They were checked by static/manual read-through against
@@ -50,8 +52,8 @@ class BlockingEngineTest {
         BlockedApp(id = 0L, ruleId = ruleId, packageName = packageName, appLabelCache = packageName)
 
     @Test
-    fun `no rules at all yields shouldBlock false`() = runTest {
-        val engine = BlockingEngine(FakeRuleRepository())
+    fun `no rules at all yields shouldBlock false`() {
+        val engine = BlockingEngine(FakeRuleSnapshotProvider())
         val decision = engine.evaluate("com.example.tiktok", dt(1, 8, 0))
 
         assertFalse(decision.shouldBlock)
@@ -62,13 +64,13 @@ class BlockingEngineTest {
     }
 
     @Test
-    fun `active rule with matching package yields shouldBlock true with correct rule info`() = runTest {
+    fun `active rule with matching package yields shouldBlock true with correct rule info`() {
         val r = rule(id = 1, name = "Morning Focus")
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(r),
             blockedAppsByRuleId = mapOf(1L to listOf(blockedApp(1, "com.example.tiktok")))
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         val decision = engine.evaluate("com.example.tiktok", dt(1, 8, 0))
 
@@ -79,13 +81,13 @@ class BlockingEngineTest {
     }
 
     @Test
-    fun `active rule with non-matching package yields shouldBlock false`() = runTest {
+    fun `active rule with non-matching package yields shouldBlock false`() {
         val r = rule(id = 1)
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(r),
             blockedAppsByRuleId = mapOf(1L to listOf(blockedApp(1, "com.example.tiktok")))
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         val decision = engine.evaluate("com.example.maps", dt(1, 8, 0))
 
@@ -94,9 +96,9 @@ class BlockingEngineTest {
     }
 
     @Test
-    fun `multiple blocked apps under one rule all resolve to shouldBlock true`() = runTest {
+    fun `multiple blocked apps under one rule all resolve to shouldBlock true`() {
         val r = rule(id = 1)
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(r),
             blockedAppsByRuleId = mapOf(
                 1L to listOf(
@@ -106,7 +108,7 @@ class BlockingEngineTest {
                 )
             )
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         assertTrue(engine.evaluate("com.example.tiktok", dt(1, 8, 0)).shouldBlock)
         assertTrue(engine.evaluate("com.example.instagram", dt(1, 8, 0)).shouldBlock)
@@ -115,7 +117,7 @@ class BlockingEngineTest {
     }
 
     @Test
-    fun `multiple active rules covering different packages each resolve independently`() = runTest {
+    fun `multiple active rules covering different packages each resolve independently`() {
         val morning = rule(id = 1, name = "Morning", start = 7 * 60, end = 10 * 60)
         val overnight = rule(
             id = 2,
@@ -124,16 +126,15 @@ class BlockingEngineTest {
             start = 23 * 60,
             end = 60
         )
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(morning, overnight),
             blockedAppsByRuleId = mapOf(
                 1L to listOf(blockedApp(1, "com.example.tiktok")),
                 2L to listOf(blockedApp(2, "com.example.game"))
             )
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
-        // 08:30 Monday: only the morning rule is active
         val tiktokDecision = engine.evaluate("com.example.tiktok", dt(1, 8, 30))
         assertTrue(tiktokDecision.shouldBlock)
         assertEquals(1L, tiktokDecision.ruleId)
@@ -141,46 +142,45 @@ class BlockingEngineTest {
         val gameAt0830 = engine.evaluate("com.example.game", dt(1, 8, 30))
         assertFalse(gameAt0830.shouldBlock) // overnight rule not active yet
 
-        // 00:30 Tuesday: only the overnight (Monday-started) rule is active
         val gameAtMidnightThirty = engine.evaluate("com.example.game", dt(2, 0, 30))
         assertTrue(gameAtMidnightThirty.shouldBlock)
         assertEquals(2L, gameAtMidnightThirty.ruleId)
     }
 
     @Test
-    fun `disabled rule never blocks even with a matching package inside its time window`() = runTest {
+    fun `disabled rule never blocks even with a matching package inside its time window`() {
         val r = rule(id = 1, enabled = false)
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(r),
             blockedAppsByRuleId = mapOf(1L to listOf(blockedApp(1, "com.example.tiktok")))
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         val decision = engine.evaluate("com.example.tiktok", dt(1, 8, 0))
         assertFalse(decision.shouldBlock)
     }
 
     @Test
-    fun `rule outside its schedule window does not block`() = runTest {
+    fun `rule outside its schedule window does not block`() {
         val r = rule(id = 1, start = 7 * 60, end = 10 * 60)
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(r),
             blockedAppsByRuleId = mapOf(1L to listOf(blockedApp(1, "com.example.tiktok")))
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         val decision = engine.evaluate("com.example.tiktok", dt(1, 12, 0)) // noon, well after 10:00
         assertFalse(decision.shouldBlock)
     }
 
     @Test
-    fun `remaining duration is passed through correctly from ScheduleEngine`() = runTest {
+    fun `remaining duration is passed through correctly from ScheduleEngine`() {
         val r = rule(id = 1, start = 7 * 60, end = 10 * 60)
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(r),
             blockedAppsByRuleId = mapOf(1L to listOf(blockedApp(1, "com.example.tiktok")))
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         val decision = engine.evaluate("com.example.tiktok", dt(1, 9, 59)) // one minute before end
         assertTrue(decision.shouldBlock)
@@ -188,25 +188,21 @@ class BlockingEngineTest {
     }
 
     @Test
-    fun `two active rules blocking the same package resolve to the one with least remaining time`() = runTest {
-        // ruleA: 07:00 -> 10:00 (3h window). ruleB: 09:00 -> 09:30 (30min window, ends sooner).
-        // Both active at 09:15 and both block the same package.
+    fun `two active rules blocking the same package resolve to the one with least remaining time`() {
         val ruleA = rule(id = 1, name = "Wide", start = 7 * 60, end = 10 * 60)
         val ruleB = rule(id = 2, name = "Narrow", start = 9 * 60, end = 9 * 60 + 30)
-        val repo = FakeRuleRepository(
+        val provider = FakeRuleSnapshotProvider(
             rules = listOf(ruleA, ruleB),
             blockedAppsByRuleId = mapOf(
                 1L to listOf(blockedApp(1, "com.example.tiktok")),
                 2L to listOf(blockedApp(2, "com.example.tiktok"))
             )
         )
-        val engine = BlockingEngine(repo)
+        val engine = BlockingEngine(provider)
 
         val decision = engine.evaluate("com.example.tiktok", dt(1, 9, 15))
 
         assertTrue(decision.shouldBlock)
-        // ruleB has 15 minutes left (09:15 -> 09:30); ruleA has 45 minutes left (09:15 -> 10:00).
-        // The engine should report the tighter constraint: ruleB.
         assertEquals(2L, decision.ruleId)
         assertEquals("Narrow", decision.ruleName)
         assertEquals(Duration.ofMinutes(15), decision.remainingDuration)

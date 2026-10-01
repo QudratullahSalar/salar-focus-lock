@@ -46,10 +46,12 @@ import com.salar.focuslock.ui.main.RuleListItem
 @Composable
 fun RuleListScreen(
     viewModel: MainViewModel,
-    onOpenAccessibilitySettings: () -> Unit
+    onOpenAccessibilitySettings: () -> Unit,
+    onRequestDeviceAdmin: () -> Unit
 ) {
     val rules by viewModel.rules.collectAsState()
     val accessibilityEnabled by viewModel.accessibilityEnabled.collectAsState()
+    val deviceAdminActive by viewModel.deviceAdminActive.collectAsState()
     var ruleToDelete by remember { mutableStateOf<FocusRule?>(null) }
 
     Scaffold(
@@ -69,6 +71,9 @@ fun RuleListScreen(
         ) {
             if (!accessibilityEnabled) {
                 item { AccessibilityBanner(onOpenAccessibilitySettings) }
+            }
+            if (!deviceAdminActive) {
+                item { UninstallProtectionBanner(onRequestDeviceAdmin) }
             }
 
             val current = rules
@@ -133,6 +138,28 @@ private fun AccessibilityBanner(onOpenSettings: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = onOpenSettings) { Text("Open Accessibility settings") }
+        }
+    }
+}
+
+@Composable
+private fun UninstallProtectionBanner(onRequestDeviceAdmin: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "Uninstall protection (optional)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Adds one extra step before Salar Focus Lock can be removed: you'd first need " +
+                    "to deactivate it in Settings → Security → Device admin apps. This does " +
+                    "NOT make the app impossible to uninstall, and it grants no other control " +
+                    "over your device — it's a speed bump for a moment of impulse, not a lock."
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onRequestDeviceAdmin) { Text("Turn on") }
         }
     }
 }

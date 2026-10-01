@@ -4,13 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import com.salar.focuslock.blocking.coordinator.BlockingCoordinator
 import com.salar.focuslock.domain.blocking.BlockingEngine
-import com.salar.focuslock.domain.model.BlockDecision
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
@@ -27,16 +21,17 @@ import javax.inject.Inject
  * to this class even if a future change accidentally tried to read it. Nothing this service
  * observes is written to disk, logged with content, or transmitted anywhere.
  *
- * Batch 3: detection + decision + redirect. When BlockDecision.shouldBlock is true, this hands
- * off to BlockingCoordinator, which owns the actual redirect (launching FocusLockActivity) —
- * see BlockingCoordinator's KDoc. This class still does no navigation/UI work itself, per
- * requirement #8.
+ * LATENCY FIX: this used to dispatch evaluate() onto a background coroutine. BlockingEngine is
+ * now synchronous, in-memory-only work (see its KDoc on RuleSnapshotProvider/RuleCache), so it
+ * runs directly on the thread the accessibility event arrives on — no coroutine
+ * dispatch/suspension in between. That extra hop was part of what produced a visible
+ * flicker/loop (the blocked app briefly foreground and interactive) reported after Batch 4.
  *
  * KNOWN RISK (documented in Batch 2, unchanged here): @AndroidEntryPoint on an
  * AccessibilityService subclass (rather than a direct Service subclass) is the highest-risk
- * Hilt item in this project to verify on the first real Android build. Static inspection this
- * batch found nothing indicating an actual problem, so this has not been redesigned — flagging
- * it again here per requirement #12 rather than silently working around it.
+ * Hilt item in this project to verify on a real build. Static inspection has found nothing
+ * indicating an actual problem (and this app's real-device testing has since confirmed the
+ * service does fire and field injection does work), so this has not been redesigned.
  */
 @AndroidEntryPoint
 class FocusLockAccessibilityService : AccessibilityService() {
@@ -47,11 +42,6 @@ class FocusLockAccessibilityService : AccessibilityService() {
     @Inject
     lateinit var blockingCoordinator: BlockingCoordinator
 
-    // SupervisorJob so one failed evaluation doesn't cancel the whole service's coroutine
-    // scope; Dispatchers.Default because BlockingEngine's work is CPU-bound repository/rule
-    // evaluation, not I/O (Room's own suspend functions already move to their own dispatcher).
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
@@ -59,26 +49,20 @@ class FocusLockAccessibilityService : AccessibilityService() {
         val foregroundPackage = event.packageName?.toString() ?: return
         if (foregroundPackage == packageName) return // never evaluate/redirect on ourselves
 
-        serviceScope.launch {
-            val decision = blockingEngine.evaluate(
-                packageName = foregroundPackage,
-                currentDateTime = LocalDateTime.now(ZoneId.systemDefault())
-            )
-            handleDecision(decision)
-        }
-    }
+        val decision = blockingEngine.evaluate(
+            packageName = foregroundPackage,
+            currentDateTime = LocalDateTime.now(ZoneId.systemDefault())
+        )
 
-    private fun handleDecision(decision: BlockDecision) {
-        // Requirement #8: the coordinator is only ever invoked for a blocking decision — it is
-        // never called (and never has to branch on shouldBlock itself) otherwise.
+        // Requirement #8 (Batch 3): the coordinator is only ever invoked for a blocking
+        // decision — it never has to branch on shouldBlock itself.
         if (decision.shouldBlock) {
             blockingCoordinator.handleDecision(decision)
         }
     }
 
     override fun onInterrupt() {
-        // Required override. No ongoing state needs cleanup here specifically; teardown
-        // happens in onDestroy().
+        // Required override. Nothing to tear down here — this service holds no ongoing state.
     }
 
     override fun onServiceConnected() {
@@ -86,10 +70,5 @@ class FocusLockAccessibilityService : AccessibilityService() {
         // Event mask, feedback type, and canRetrieveWindowContent are all declared statically
         // in res/xml/accessibility_service_config.xml via the manifest's <meta-data>, so no
         // AccessibilityServiceInfo needs to be constructed or set at runtime here.
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        serviceScope.cancel()
     }
 }

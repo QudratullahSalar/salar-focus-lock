@@ -6,6 +6,7 @@ import com.salar.focuslock.domain.model.FocusRule
 import com.salar.focuslock.domain.repository.RuleRepository
 import com.salar.focuslock.domain.scheduler.ScheduleEngine
 import com.salar.focuslock.permissions.AccessibilityPermissionChecker
+import com.salar.focuslock.permissions.DeviceAdminPermissionChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -42,7 +43,8 @@ data class RuleListItem(
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val ruleRepository: RuleRepository,
-    private val accessibilityPermissionChecker: AccessibilityPermissionChecker
+    private val accessibilityPermissionChecker: AccessibilityPermissionChecker,
+    private val deviceAdminPermissionChecker: DeviceAdminPermissionChecker
 ) : ViewModel() {
 
     private val _screen = MutableStateFlow<Screen>(Screen.RuleList)
@@ -51,6 +53,12 @@ class MainViewModel @Inject constructor(
     private val _accessibilityEnabled =
         MutableStateFlow(accessibilityPermissionChecker.isAccessibilityServiceEnabled())
     val accessibilityEnabled: StateFlow<Boolean> = _accessibilityEnabled.asStateFlow()
+
+    // Optional — unlike accessibilityEnabled, the app functions without this; see the
+    // "Uninstall protection" card's copy in RuleListScreen for what it actually does.
+    private val _deviceAdminActive =
+        MutableStateFlow(deviceAdminPermissionChecker.isDeviceAdminActive())
+    val deviceAdminActive: StateFlow<Boolean> = _deviceAdminActive.asStateFlow()
 
     // Re-evaluates "is this rule locked right now" periodically, so the list updates by itself
     // when a rule's window starts or ends while the screen is open.
@@ -86,6 +94,10 @@ class MainViewModel @Inject constructor(
 
     fun refreshAccessibilityStatus() {
         _accessibilityEnabled.value = accessibilityPermissionChecker.isAccessibilityServiceEnabled()
+    }
+
+    fun refreshDeviceAdminStatus() {
+        _deviceAdminActive.value = deviceAdminPermissionChecker.isDeviceAdminActive()
     }
 
     fun openEditor(ruleId: Long?) {

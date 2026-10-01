@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Deliberately empty: this requests ZERO device-management policies (no password rules, no
+  remote wipe, no camera disable, nothing). Registering as an active Device Administrator at
+  all — regardless of which policies are requested — already means Android requires
+  deactivating admin access here (Settings > Security > Device admin apps) before this app can
+  be uninstalled. That one standard-Android behavior is the entire point; no extra policy is
+  requested or needed for it.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies />
+</device-admin>

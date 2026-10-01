@@ -13,14 +13,16 @@ import com.salar.focuslock.ui.rules.RuleListScreen
 fun AppRoot(
     mainViewModel: MainViewModel,
     editorViewModel: RuleEditorViewModel,
-    onOpenAccessibilitySettings: () -> Unit
+    onOpenAccessibilitySettings: () -> Unit,
+    onRequestDeviceAdmin: () -> Unit
 ) {
     val screen by mainViewModel.screen.collectAsState()
 
     when (val current = screen) {
         Screen.RuleList -> RuleListScreen(
             viewModel = mainViewModel,
-            onOpenAccessibilitySettings = onOpenAccessibilitySettings
+            onOpenAccessibilitySettings = onOpenAccessibilitySettings,
+            onRequestDeviceAdmin = onRequestDeviceAdmin
         )
 
         is Screen.RuleEditor -> {

@@ -72,6 +72,25 @@
             android:excludeFromRecents="true"
             android:theme="@style/Theme.SalarFocusLock" />
 
+        <!--
+          Optional uninstall-protection feature (see FocusLockDeviceAdminReceiver's KDoc for
+          exactly what this does and does not do — it is NOT Device Owner mode, requests zero
+          management policies, and adds a deactivation step before uninstall rather than
+          blocking it outright). BIND_DEVICE_ADMIN is, like BIND_ACCESSIBILITY_SERVICE, a
+          system-restricted permission on the receiver itself, not an app-requested permission.
+        -->
+        <receiver
+            android:name=".blocking.admin.FocusLockDeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_receiver" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

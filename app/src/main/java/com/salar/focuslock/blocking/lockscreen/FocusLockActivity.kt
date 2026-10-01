@@ -46,7 +46,7 @@ class FocusLockActivity : ComponentActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    moveTaskToBack(true)
+                    goHome()
                 }
             }
         )
@@ -85,10 +85,31 @@ class FocusLockActivity : ComponentActivity() {
                     ruleRepository = ruleRepository,
                     appDiscoveryRepository = appDiscoveryRepository,
                     appIconProvider = appIconProvider,
-                    onShouldClose = { moveTaskToBack(true) }
+                    onShouldClose = { goHome() }
                 )
             }
         }
+    }
+
+    /**
+     * BUG FIX: this used to call moveTaskToBack(true). That was wrong — FocusLockActivity is
+     * launched with FLAG_ACTIVITY_NEW_TASK from the moment the BLOCKED app is foreground, so
+     * the task sitting immediately underneath this one is the blocked app's own task, not the
+     * home screen. moveTaskToBack() just reveals whatever is underneath, which meant it
+     * revealed the blocked app itself — briefly interactive — which AccessibilityService then
+     * detected again and re-triggered this same screen, producing exactly the flicker/loop
+     * reported: exit, blocked app flashes for a moment, re-lock, repeat.
+     *
+     * Explicitly launching the home screen's own intent (and finishing this Activity) always
+     * goes to Home, never back into the task underneath, which is the fix.
+     */
+    private fun goHome() {
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(homeIntent)
+        finish()
     }
 
     companion object {

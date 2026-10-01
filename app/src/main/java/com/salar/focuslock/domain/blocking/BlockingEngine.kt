@@ -2,7 +2,7 @@ package com.salar.focuslock.domain.blocking
 
 import com.salar.focuslock.domain.model.BlockDecision
 import com.salar.focuslock.domain.model.FocusRule
-import com.salar.focuslock.domain.repository.RuleRepository
+import com.salar.focuslock.domain.repository.RuleSnapshotProvider
 import com.salar.focuslock.domain.scheduler.ScheduleEngine
 import java.time.Duration
 import java.time.LocalDateTime
@@ -11,16 +11,19 @@ import javax.inject.Inject
 /**
  * Sits between the AccessibilityService (or any future caller) and the schedule/data layers:
  *
- *   AccessibilityService -> BlockingEngine -> ScheduleEngine -> RuleRepository -> Room
+ *   AccessibilityService -> BlockingEngine -> ScheduleEngine -> RuleSnapshotProvider -> (RuleCache mirrors Room)
  *
  * BlockingEngine owns no business logic of its own beyond "which active rule, if any, blocks
- * this package" — the actual time-window math is ScheduleEngine's (already unit-tested in
- * Batch 1), and rule/blocked-app data comes from RuleRepository. This keeps
- * AccessibilityService itself a thin event-to-decision relay with no logic to test in
- * isolation.
+ * this package" — the actual time-window math is ScheduleEngine's (unit-tested in Batch 1).
+ *
+ * Reads from RuleSnapshotProvider (an in-memory mirror, see RuleCache) rather than from
+ * RuleRepository directly: this method is called once per AccessibilityService foreground-
+ * change event, so it is deliberately plain/synchronous — no suspend, no Room round trip — to
+ * minimize the detection-to-redirect latency window. That latency was a real reported bug
+ * (the blocked app briefly flickering visible/interactive before the lock screen took over).
  */
 class BlockingEngine @Inject constructor(
-    private val ruleRepository: RuleRepository
+    private val ruleSnapshotProvider: RuleSnapshotProvider
 ) {
 
     /**
@@ -31,15 +34,15 @@ class BlockingEngine @Inject constructor(
      * soonest-to-end constraint is the most actionable one to show the user. This is a
      * deliberate, deterministic tie-break, not an arbitrary "first match wins".
      */
-    suspend fun evaluate(packageName: String, currentDateTime: LocalDateTime): BlockDecision {
-        val enabledRules = ruleRepository.getEnabledRules()
+    fun evaluate(packageName: String, currentDateTime: LocalDateTime): BlockDecision {
+        val enabledRules = ruleSnapshotProvider.getEnabledRulesSnapshot()
         val activeRules = ScheduleEngine.getActiveRules(enabledRules, currentDateTime)
 
         var winningRule: FocusRule? = null
         var winningRemaining: Duration? = null
 
         for (rule in activeRules) {
-            val blockedApps = ruleRepository.getBlockedApps(rule.id)
+            val blockedApps = ruleSnapshotProvider.getBlockedAppsSnapshot(rule.id)
             val blocksThisPackage = blockedApps.any { it.packageName == packageName }
             if (!blocksThisPackage) continue
 
